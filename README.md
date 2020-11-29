@@ -1,1 +1,1 @@
-# hive-tool
+# data-generator-hive
