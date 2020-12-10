@@ -1,7 +1,6 @@
 package com.codecubic.main;
 
 import com.codecubic.model.AppConf;
-import com.codecubic.model.JdbcConf;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.yaml.snakeyaml.Yaml;

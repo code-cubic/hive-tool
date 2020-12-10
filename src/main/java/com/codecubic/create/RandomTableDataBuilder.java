@@ -3,13 +3,12 @@ package com.codecubic.create;
 import com.codecubic.dao.JdbcTemplate;
 import com.codecubic.model.ColumnMeta;
 import com.codecubic.model.TableMeta;
+import com.codecubic.util.TimeUtil;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.RandomUtils;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -48,11 +47,31 @@ public class RandomTableDataBuilder implements ITableDataBuilder {
             List<String> selCols = new ArrayList<>(normalCols.size());
 
             for (ColumnMeta col : normalCols) {
-                if (col.getType().equalsIgnoreCase("string")) {
-                    randomColVals.add(format("concat('" + col.getName() + "_',ceiling(rand()*%s)) as %s", pkNames.contains(col.getName()) ? Integer.MAX_VALUE : 100, col.getName()));
-                } else {
-                    randomColVals.add(format("ceiling(rand()*%s) as %s", Integer.MAX_VALUE, col.getName()));
+                long randomSalt = pkNames.contains(col.getName()) ? Integer.MAX_VALUE : RandomUtils.nextInt(1, 200);
+                String cType = col.getType().toLowerCase();
+                cType = cType.startsWith("decimal(") ? "double" : cType;
+                switch (cType) {
+                    case "string":
+                        randomColVals.add(format("concat('%s_',ceiling(rand()*%s)) as %s", col.getName(), randomSalt, col.getName()));
+                        break;
+                    case "double":
+                        randomColVals.add(format("round(rand()*%s,4) as %s", randomSalt, col.getName()));
+                        break;
+                    case "date":
+                        randomColVals.add(format("date_add('%s',cast(rand()*%s as int)) as %s",
+                                TimeUtil.date2Str(new Date(), TimeUtil.YYYY) + "-01-01",
+                                randomSalt, col.getName()));
+                        break;
+                    case "timestamp":
+                        randomColVals.add(format("date_add('%s',cast(rand()*%s as int)) as %s",
+                                TimeUtil.date2Str(new Date(), TimeUtil.YYYY) + "-01-01",
+                                randomSalt, col.getName()));
+                        break;
+                    default:
+                        randomColVals.add(format("ceiling(rand()*%s) as %s", randomSalt, col.getName()));
+
                 }
+
                 selCols.add("max(" + col.getName() + ")");
             }
 
