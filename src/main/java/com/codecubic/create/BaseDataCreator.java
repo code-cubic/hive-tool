@@ -31,6 +31,26 @@ public class BaseDataCreator implements Cloneable {
         private ITableDataCheck tableDataCheck;
         private JdbcConfig jdbcConfig;
 
+        public Builder setTableManager(ITableManager tableManager) {
+            this.tableManager = tableManager;
+            return this;
+        }
+
+        public Builder setTableDataBuilder(ITableDataBuilder tableDataBuilder) {
+            this.tableDataBuilder = tableDataBuilder;
+            return this;
+        }
+
+        public Builder setTableDataCheck(ITableDataCheck tableDataCheck) {
+            this.tableDataCheck = tableDataCheck;
+            return this;
+        }
+
+        public Builder setJdbcConfig(JdbcConfig jdbcConfig) {
+            this.jdbcConfig = jdbcConfig;
+            return this;
+        }
+
         private Builder() {
         }
 
@@ -54,7 +74,7 @@ public class BaseDataCreator implements Cloneable {
     }
 
 
-    public boolean create(String database, String tableName) throws TableNotFound, SQLException {
+    public boolean createData(String database, String tableName) throws TableNotFound, SQLException {
         this.database = database;
         this.tableName = tableName;
         this.tmpTableName = tableName + "_tmp";
@@ -79,5 +99,6 @@ public class BaseDataCreator implements Cloneable {
 
     public void close() {
         tableManager.dropTable(database, this.tmpTableName);
+        tableManager.close();
     }
 }

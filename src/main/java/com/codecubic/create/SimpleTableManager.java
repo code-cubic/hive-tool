@@ -78,4 +78,9 @@ public class SimpleTableManager implements ITableManager {
         log.info("createSql={}", createSql);
         jdbcTemplate.execute(createSql);
     }
+
+    @Override
+    public void close() {
+        this.jdbcTemplate.close();
+    }
 }

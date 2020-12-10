@@ -5,7 +5,7 @@ import com.codecubic.model.TableMeta;
 
 import java.sql.SQLException;
 
-public interface ITableManager {
+public interface ITableManager extends Cloneable {
 
     void setJdbcTemplate(JdbcTemplate jdbcTemplate);
 
@@ -16,4 +16,6 @@ public interface ITableManager {
     void dropTable(String database, String tmpTableName);
 
     void createTable(TableMeta tableMeta) throws SQLException;
+
+    void close();
 }
