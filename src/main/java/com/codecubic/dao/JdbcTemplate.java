@@ -9,45 +9,83 @@ import org.apache.commons.dbutils.BeanProcessor;
 import org.apache.commons.dbutils.QueryRunner;
 import org.apache.commons.dbutils.handlers.BeanHandler;
 import org.apache.commons.dbutils.handlers.BeanListHandler;
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.thrift.TException;
 
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class JdbcTemplate {
-    private static String SELECT_TEMPLAT = "select * from %s limit 1";
-    private JdbcConfig _jdbcConfig;
-    private Connection _conn;
+    private JdbcConfig jdbcConfig;
+    private Connection conn;
+    private HiveMetaStoreClient hiveMetaClient;
+    private HiveConf hiveConf;
+
 
     public JdbcTemplate(JdbcConfig jdbcConfig) {
-        this._jdbcConfig = jdbcConfig;
+        this.jdbcConfig = jdbcConfig;
         try {
-            Class.forName(_jdbcConfig.getDriver());
+            Class.forName(this.jdbcConfig.getDriver());
+            hiveConf = new HiveConf();
+            hiveConf.addResource("hive-site.xml");
+            hiveMetaClient = new HiveMetaStoreClient(hiveConf);
         } catch (Exception e) {
             log.error("", e);
-            e.printStackTrace();
-            System.exit(-1);
         }
     }
 
 
     private synchronized Connection getConn() throws SQLException {
-        if (_conn == null) {
+        if (this.conn == null) {
             try {
-                _conn = DriverManager.getConnection(this._jdbcConfig.getUrl(), this._jdbcConfig.getUser(), this._jdbcConfig.getPasswd());
+                this.conn = DriverManager.getConnection(this.jdbcConfig.getUrl(), this.jdbcConfig.getUser(), this.jdbcConfig.getPasswd());
             } catch (SQLException e) {
                 throw new SQLException("Connect to MySql Server Error : " + e.getMessage());
             }
         }
-        return _conn;
+        return this.conn;
     }
 
+    /**
+     * 获取数据库
+     */
+    public List<String> getAllDatabases() {
+        List<String> allDatabases = new ArrayList<>(0);
+        try {
+            allDatabases = this.hiveMetaClient.getAllDatabases();
+        } catch (TException e) {
+            e.printStackTrace();
+        }
+        return allDatabases;
+    }
 
     /**
-     * wh:执行非查询类SQL
+     * 获取指定数据库所有表
+     *
+     * @param dbName
+     * @return
+     */
+    public List<String> getTables(String dbName) {
+        List<String> tables = new ArrayList<>(0);
+        try {
+            tables = this.hiveMetaClient.getAllTables(dbName);
+        } catch (MetaException e) {
+            e.printStackTrace();
+        }
+        return tables;
+    }
+
+    /**
+     * 执行非查询类SQL
      *
      * @param sql
      */
@@ -57,63 +95,50 @@ public class JdbcTemplate {
         stat.execute(sql);
     }
 
-    /**
-     * 获取表中所有字段名称
-     *
-     * @param tableName 表名
-     * @return
-     */
-    private List<String> getAllColNames(String tableName) {
-        List<String> columnNames = new ArrayList<>();
-        try (PreparedStatement pStemt = _conn.prepareStatement(String.format(SELECT_TEMPLAT, tableName))) {
-            // 结果集元数据
-            ResultSetMetaData rsmd = pStemt.getMetaData();
-            // 表列数
-            int size = rsmd.getColumnCount();
-            for (int i = 0; i < size; i++) {
-                columnNames.add(rsmd.getColumnName(i + 1));
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return columnNames;
-    }
 
-    public List<ColumnMeta> getAllCols(String schema, String tabName) {
-        List<ColumnMeta> columnMetas = new ArrayList<>();
-        try {
-            //获取数据库的元数据
-            DatabaseMetaData dbMetaData = _conn.getMetaData();
-            //从元数据中获取到所有的表名
-            ResultSet colRet = dbMetaData.getColumns(null, schema, tabName, "%");
-            while (colRet.next()) {
+    public List<ColumnMeta> getColMetas(String database, String tabName) throws SQLException, TException {
+        Table table = hiveMetaClient.getTable(database, tabName);
+        List<FieldSchema> cols = table.getSd().getCols();
+        List<ColumnMeta> columnMetas = cols.stream().map(e -> {
+            ColumnMeta columnMeta = new ColumnMeta();
+            columnMeta.setName(e.getName());
+            columnMeta.setType(e.getType());
+            columnMeta.setRemark(e.getComment());
+            return columnMeta;
+        }).collect(Collectors.toList());
+        if (table.isSetPartitionKeys()) {
+            columnMetas.addAll(table.getPartitionKeys().stream().map(e -> {
                 ColumnMeta columnMeta = new ColumnMeta();
-                columnMeta.setName(colRet.getString("COLUMN_NAME"));
-                columnMeta.setType(colRet.getString("TYPE_NAME"));
-                columnMeta.setSize(colRet.getInt("COLUMN_SIZE"));
-                columnMeta.setDigits(colRet.getInt("DECIMAL_DIGITS"));
-                int nullable = colRet.getInt("NULLABLE");
-                columnMeta.setNullAble(nullable == 1 ? true : false);
-                columnMetas.add(columnMeta);
-            }
-        } catch (Exception e) {
-            log.error("", e);
+                columnMeta.setName(e.getName());
+                columnMeta.setType(e.getType());
+                columnMeta.setRemark(e.getComment());
+                columnMeta.setPartitionCol(true);
+                return columnMeta;
+            }).collect(Collectors.toList()));
         }
         return columnMetas;
     }
 
     public TableMeta getTabMeta(String schema, String tabName) throws SQLException {
+        Connection conn = getConn();
         //获取数据库的元数据
-        DatabaseMetaData dbMetaData = _conn.getMetaData();
+        DatabaseMetaData dbMetaData = conn.getMetaData();
         //从元数据中获取到所有的表名
         ResultSet rs = dbMetaData.getTables(null, schema, tabName, new String[]{"TABLE"});
         while (rs.next()) {
             TableMeta meta = new TableMeta();
             meta.setName(rs.getString("TABLE_NAME"));
             meta.setType(rs.getString("TABLE_TYPE"));
-            meta.setCat(rs.getString("TABLE_CAT"));
+            meta.setDatabase(rs.getString("TABLE_CAT"));
             meta.setUserName(rs.getString("TABLE_SCHEM"));
             meta.setRemark(rs.getString("REMARKS"));
+            List<ColumnMeta> allCols = null;
+            try {
+                allCols = getColMetas(schema, tabName);
+            } catch (TException e) {
+                log.error("", e);
+            }
+            meta.setColMetas(allCols);
             return meta;
         }
         return new TableMeta();
@@ -121,12 +146,13 @@ public class JdbcTemplate {
 
 
     public synchronized void close() {
-        if (_conn != null) {
+        if (this.conn != null) {
             try {
-                _conn.close();
+                this.conn.close();
+                this.hiveMetaClient.close();
             } catch (SQLException e) {
             } finally {
-                _conn = null;
+                this.conn = null;
             }
         }
     }
@@ -158,7 +184,7 @@ public class JdbcTemplate {
         try {
             QueryRunner qRunner = new QueryRunner();
             List<T> query = (List<T>) qRunner.query(
-                    _conn,
+                    this.conn,
                     sql,
                     new BeanListHandler(
                             clazz, new BasicRowProcessor(new BeanProcessor(map))));
@@ -177,7 +203,7 @@ public class JdbcTemplate {
 
             QueryRunner qRunner = new QueryRunner();
             T query = (T) qRunner.query(
-                    this._conn,
+                    this.conn,
                     sql,
                     new BeanHandler(
                             clazz, new BasicRowProcessor(new BeanProcessor(map))));

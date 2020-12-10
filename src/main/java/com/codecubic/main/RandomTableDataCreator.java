@@ -9,6 +9,7 @@ import com.codecubic.model.JdbcConfig;
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
 
 @Slf4j
 public class RandomTableDataCreator {
@@ -25,7 +26,9 @@ public class RandomTableDataCreator {
                 .setTableDataCheck(new SimpleTableDataCheck())
                 .setJdbcConfig(jdbcConfig)
                 .build();
-        creator.createData("cpp_c", "wh_20201201");
+        ArrayList<String> pkCols = new ArrayList<>();
+        pkCols.add("customer_id");
+        creator.createData("cpp_c", "bdp_cid_user_label", pkCols);
         creator.close();
     }
 }

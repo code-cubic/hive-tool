@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -74,12 +75,21 @@ public class BaseDataCreator implements Cloneable {
     }
 
 
-    public boolean createData(String database, String tableName) throws TableNotFound, SQLException {
+    public boolean createData(String database, String tableName, Collection<String> pkCols) throws TableNotFound, SQLException {
         this.database = database;
         this.tableName = tableName;
         this.tmpTableName = tableName + "_tmp";
 
         TableMeta table = tableManager.getTable(database, tableName);
+
+        if (pkCols != null) {
+            table.getColMetas().forEach(col -> {
+                if (pkCols.contains(col.getName())) {
+                    col.setPkCol(true);
+                }
+            });
+        }
+
         if (table.getName() == null) {
             throw new TableNotFound(database + "." + tableName);
         }
@@ -89,7 +99,7 @@ public class BaseDataCreator implements Cloneable {
         }
 
         Map<String, Object> partitionColValMap = new HashMap<>();
-        partitionColValMap.putIfAbsent("etl_dt", "20201201");
+        partitionColValMap.putIfAbsent("etl_dt", "20200925");
 
         this.tableDataBuilder.dataCreate(table, partitionColValMap, 2, 10);
         this.tableDataCheck.dataCheck(table, partitionColValMap, 2 * 10);
