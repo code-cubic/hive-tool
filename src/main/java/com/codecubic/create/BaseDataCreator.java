@@ -7,6 +7,10 @@ import com.codecubic.model.TableMeta;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
+
 @Data
 @Slf4j
 public class BaseDataCreator implements Cloneable {
@@ -35,9 +39,11 @@ public class BaseDataCreator implements Cloneable {
         }
 
         public BaseDataCreator build() {
+
             JdbcTemplate jdbcTemplate = new JdbcTemplate(jdbcConfig);
             this.tableManager.setJdbcTemplate(jdbcTemplate);
             this.tableDataBuilder.setJdbcTemplate(jdbcTemplate);
+            this.tableDataCheck.setJdbcTemplate(jdbcTemplate);
             BaseDataCreator baseDataCreator = new BaseDataCreator();
             baseDataCreator.setTableManager(this.tableManager);
             baseDataCreator.setTableDataBuilder(this.tableDataBuilder);
@@ -48,7 +54,7 @@ public class BaseDataCreator implements Cloneable {
     }
 
 
-    public boolean create(String database, String tableName) throws TableNotFound {
+    public boolean create(String database, String tableName) throws TableNotFound, SQLException {
         this.database = database;
         this.tableName = tableName;
         this.tmpTableName = tableName + "_tmp";
@@ -62,6 +68,11 @@ public class BaseDataCreator implements Cloneable {
             tableManager.createTmpTable(database, tmpTableName);
         }
 
+        Map<String, Object> partitionColValMap = new HashMap<>();
+        partitionColValMap.putIfAbsent("etl_dt", "20201201");
+
+        this.tableDataBuilder.dataCreate(table, partitionColValMap, 2, 10);
+        this.tableDataCheck.dataCheck(table, partitionColValMap, 2 * 10);
 
         return false;
     }
