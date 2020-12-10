@@ -12,4 +12,6 @@ batch: 10
 pkCols:
   - customer_id
 partitionColVals:
-  etl_dt: 20200925
+  -
+   etl_dt: 20200924
+

@@ -47,12 +47,14 @@ public class RandomTableDataBuilder implements ITableDataBuilder {
             List<String> selCols = new ArrayList<>(normalCols.size());
 
             for (ColumnMeta col : normalCols) {
-                long randomSalt = pkNames.contains(col.getName()) ? Integer.MAX_VALUE : RandomUtils.nextInt(1, 200);
+                boolean isPk = pkNames.contains(col.getName());
+                long randomSalt = isPk ? Integer.MAX_VALUE : RandomUtils.nextInt(1, 300);
                 String cType = col.getType().toLowerCase();
                 cType = cType.startsWith("decimal(") ? "double" : cType;
                 switch (cType) {
                     case "string":
-                        randomColVals.add(format("concat('%s_',ceiling(rand()*%s)) as %s", col.getName(), randomSalt, col.getName()));
+                        //非pk col 不加前缀，主要是方便列式分区表的字段值进行类型转换，防止该格式下字符串不能转换成其他格式
+                        randomColVals.add(format("concat('%s',ceiling(rand()*%s)) as %s", isPk ? col.getName() : "", randomSalt, col.getName()));
                         break;
                     case "double":
                         randomColVals.add(format("round(rand()*%s,4) as %s", randomSalt, col.getName()));

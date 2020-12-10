@@ -5,7 +5,6 @@ import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -18,6 +17,6 @@ public class AppConf {
     private int num;
     private int batch;
     private List<String> pkCols = new ArrayList<>();
-    private Map<String, Object> partitionColVals = new HashMap<>();
+    private List<Map<String, Object>> partitionColVals = new ArrayList<>();
     private JdbcConf jdbcConf;
 }

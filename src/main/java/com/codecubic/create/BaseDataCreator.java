@@ -1,5 +1,6 @@
 package com.codecubic.create;
 
+import com.alibaba.fastjson.JSONObject;
 import com.codecubic.dao.JdbcTemplate;
 import com.codecubic.exception.TableCreateException;
 import com.codecubic.exception.TableDataBuildException;
@@ -11,7 +12,6 @@ import com.codecubic.model.TableMeta;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
-import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
@@ -78,13 +78,13 @@ public class BaseDataCreator implements Cloneable {
     }
 
 
-    public void createData(AppConf appConf) throws TableNotFound, SQLException, TableDataBuildException, TableDataCheckException, TableCreateException {
+    public void createData(AppConf appConf) throws TableNotFound, TableCreateException, TableDataCheckException, TableDataBuildException {
         this.database = appConf.getDatabase();
         this.tableName = appConf.getTableName();
         this.tmpTableName = tableName + "_tmp";
 
         List<String> pkCols = appConf.getPkCols();
-        Map<String, Object> partitionColVals = appConf.getPartitionColVals();
+        List<Map<String, Object>> partitionColVals = appConf.getPartitionColVals();
         int batch = appConf.getBatch();
         int num = appConf.getNum();
         long total = num * batch;
@@ -109,14 +109,16 @@ public class BaseDataCreator implements Cloneable {
             }
         }
 
-        boolean builderSuss = this.tableDataBuilder.dataCreate(table, partitionColVals, num, batch);
-        if (builderSuss) {
-            boolean checkSuss = this.tableDataCheck.dataCheck(table, partitionColVals, total);
-            if (!checkSuss) {
-                throw new TableDataCheckException();
+        for (Map<String, Object> map : partitionColVals) {
+            boolean builderSuss = this.tableDataBuilder.dataCreate(table, map, num, batch);
+            if (builderSuss) {
+                boolean checkSuss = this.tableDataCheck.dataCheck(table, map, total);
+                if (!checkSuss) {
+                    throw new TableDataCheckException(JSONObject.toJSONString(map));
+                }
+            } else {
+                throw new TableDataBuildException(JSONObject.toJSONString(map));
             }
-        } else {
-            throw new TableDataBuildException();
         }
     }
 

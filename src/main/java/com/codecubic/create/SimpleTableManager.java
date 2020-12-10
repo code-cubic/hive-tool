@@ -34,7 +34,7 @@ public class SimpleTableManager implements ITableManager {
         log.info("start createTmpTable:{}.{}", database, tmpTableName);
         //加载基表
         List<String> baseTabDatas = new ArrayList<>();
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 100; i++) {
             baseTabDatas.add(format(" select 1 as col_1 "));
         }
         try {
