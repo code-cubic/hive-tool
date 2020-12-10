@@ -31,16 +31,17 @@ public class SimpleTableManager implements ITableManager {
 
     @Override
     public boolean createTmpTable(String database, String tmpTableName) {
-        log.info("start createTmpTable:%s.%s", database, tmpTableName);
+        log.info("start createTmpTable:{}.{}", database, tmpTableName);
         //加载基表
         List<String> baseTabDatas = new ArrayList<>();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 1000; i++) {
             baseTabDatas.add(format(" select 1 as col_1 "));
         }
         try {
             this.jdbcTemplate.execute(format("drop table %s.%s", database, tmpTableName));
-            String baseTabCreatSql = format("create table %s.%s as select col_1 from (%s) temp", database, tmpTableName, String.join("union all", baseTabDatas));
-            this.jdbcTemplate.execute(baseTabCreatSql);
+            String tmpTablSql = format("create table %s.%s as select col_1 from (%s) temp", database, tmpTableName, String.join("union all", baseTabDatas));
+            log.info("tmpTablSql:{}", tmpTablSql);
+            this.jdbcTemplate.execute(tmpTablSql);
             return true;
         } catch (Exception e) {
             log.error("", e);

@@ -1,15 +1,18 @@
 package com.codecubic.create;
 
 import com.codecubic.dao.JdbcTemplate;
+import com.codecubic.exception.TableCreateException;
+import com.codecubic.exception.TableDataBuildException;
+import com.codecubic.exception.TableDataCheckException;
 import com.codecubic.exception.TableNotFound;
-import com.codecubic.model.JdbcConfig;
+import com.codecubic.model.AppConf;
+import com.codecubic.model.JdbcConf;
 import com.codecubic.model.TableMeta;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.SQLException;
-import java.util.Collection;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Data
@@ -30,7 +33,7 @@ public class BaseDataCreator implements Cloneable {
         private ITableManager tableManager;
         private ITableDataBuilder tableDataBuilder;
         private ITableDataCheck tableDataCheck;
-        private JdbcConfig jdbcConfig;
+        private JdbcConf jdbcConf;
 
         public Builder setTableManager(ITableManager tableManager) {
             this.tableManager = tableManager;
@@ -47,8 +50,8 @@ public class BaseDataCreator implements Cloneable {
             return this;
         }
 
-        public Builder setJdbcConfig(JdbcConfig jdbcConfig) {
-            this.jdbcConfig = jdbcConfig;
+        public Builder setJdbcConf(JdbcConf jdbcConf) {
+            this.jdbcConf = jdbcConf;
             return this;
         }
 
@@ -61,7 +64,7 @@ public class BaseDataCreator implements Cloneable {
 
         public BaseDataCreator build() {
 
-            JdbcTemplate jdbcTemplate = new JdbcTemplate(jdbcConfig);
+            JdbcTemplate jdbcTemplate = new JdbcTemplate(jdbcConf);
             this.tableManager.setJdbcTemplate(jdbcTemplate);
             this.tableDataBuilder.setJdbcTemplate(jdbcTemplate);
             this.tableDataCheck.setJdbcTemplate(jdbcTemplate);
@@ -75,13 +78,18 @@ public class BaseDataCreator implements Cloneable {
     }
 
 
-    public boolean createData(String database, String tableName, Collection<String> pkCols) throws TableNotFound, SQLException {
-        this.database = database;
-        this.tableName = tableName;
+    public void createData(AppConf appConf) throws TableNotFound, SQLException, TableDataBuildException, TableDataCheckException, TableCreateException {
+        this.database = appConf.getDatabase();
+        this.tableName = appConf.getTableName();
         this.tmpTableName = tableName + "_tmp";
 
-        TableMeta table = tableManager.getTable(database, tableName);
+        List<String> pkCols = appConf.getPkCols();
+        Map<String, Object> partitionColVals = appConf.getPartitionColVals();
+        int batch = appConf.getBatch();
+        int num = appConf.getNum();
+        long total = num * batch;
 
+        TableMeta table = tableManager.getTable(database, tableName);
         if (pkCols != null) {
             table.getColMetas().forEach(col -> {
                 if (pkCols.contains(col.getName())) {
@@ -95,16 +103,21 @@ public class BaseDataCreator implements Cloneable {
         }
         TableMeta tmpTable = tableManager.getTable(database, tmpTableName);
         if (tmpTable.getName() == null) {
-            tableManager.createTmpTable(database, tmpTableName);
+            boolean suss = tableManager.createTmpTable(database, tmpTableName);
+            if (!suss) {
+                throw new TableCreateException();
+            }
         }
 
-        Map<String, Object> partitionColValMap = new HashMap<>();
-        partitionColValMap.putIfAbsent("etl_dt", "20200925");
-
-        this.tableDataBuilder.dataCreate(table, partitionColValMap, 2, 10);
-        this.tableDataCheck.dataCheck(table, partitionColValMap, 2 * 10);
-
-        return false;
+        boolean builderSuss = this.tableDataBuilder.dataCreate(table, partitionColVals, num, batch);
+        if (builderSuss) {
+            boolean checkSuss = this.tableDataCheck.dataCheck(table, partitionColVals, total);
+            if (!checkSuss) {
+                throw new TableDataCheckException();
+            }
+        } else {
+            throw new TableDataBuildException();
+        }
     }
 
     public void close() {

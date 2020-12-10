@@ -1,0 +1,15 @@
+jdbcConf:
+  name: "hive"
+  user: "hive"
+  passwd: "hive"
+  driver: "org.apache.hive.jdbc.HiveDriver"
+  url: "jdbc:hive2://bxzj-test-swift0.bxzj.baixinlocal.com:2181,bxzj-test-swift1.bxzj.baixinlocal.com:2181,bxzj-test-swift2.bxzj.baixinlocal.com:2181/;serviceDiscoveryMode=zooKeeper;zooKeeperNamespace=hiveserver2"
+
+database: "cpp_c"
+tableName: "bdp_cid_user_label"
+num: 3
+batch: 10
+pkCols:
+  - customer_id
+partitionColVals:
+  etl_dt: 20200925

@@ -11,7 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 @Setter
 @NoArgsConstructor
 @ToString
-public class JdbcConfig {
+public class JdbcConf {
     private String driver;
     private String name;
     private String url;

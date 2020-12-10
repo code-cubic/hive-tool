@@ -4,31 +4,28 @@ import com.codecubic.create.BaseDataCreator;
 import com.codecubic.create.RandomTableDataBuilder;
 import com.codecubic.create.SimpleTableDataCheck;
 import com.codecubic.create.SimpleTableManager;
-import com.codecubic.exception.TableNotFound;
-import com.codecubic.model.JdbcConfig;
+import com.codecubic.model.AppConf;
 import lombok.extern.slf4j.Slf4j;
-
-import java.sql.SQLException;
-import java.util.ArrayList;
 
 @Slf4j
 public class RandomTableDataCreator {
-    public static void main(String[] args) throws TableNotFound, SQLException {
-        JdbcConfig jdbcConfig = new JdbcConfig();
-        jdbcConfig.setName("hive");
-        jdbcConfig.setUser("cpp");
-        jdbcConfig.setPasswd("cpp");
-        jdbcConfig.setDriver("org.apache.hive.jdbc.HiveDriver");
-        jdbcConfig.setUrl("jdbc:hive2://bxzj-test-swift0.bxzj.baixinlocal.com:2181,bxzj-test-swift1.bxzj.baixinlocal.com:2181,bxzj-test-swift2.bxzj.baixinlocal.com:2181/;serviceDiscoveryMode=zooKeeper;zooKeeperNamespace=hiveserver2");
+    public static boolean randomDataCreate(AppConf appConf) {
+        log.info("appConf:{}", appConf);
+
         BaseDataCreator creator = BaseDataCreator.Builder.get()
                 .setTableManager(new SimpleTableManager())
                 .setTableDataBuilder(new RandomTableDataBuilder())
                 .setTableDataCheck(new SimpleTableDataCheck())
-                .setJdbcConfig(jdbcConfig)
+                .setJdbcConf(appConf.getJdbcConf())
                 .build();
-        ArrayList<String> pkCols = new ArrayList<>();
-        pkCols.add("customer_id");
-        creator.createData("cpp_c", "bdp_cid_user_label", pkCols);
-        creator.close();
+        try {
+            creator.createData(appConf);
+            return true;
+        } catch (Exception e) {
+            log.error("", e);
+        } finally {
+            creator.close();
+        }
+        return false;
     }
 }

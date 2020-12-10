@@ -34,7 +34,7 @@ public class SimpleTableDataCheck implements ITableDataCheck {
         }
         String countSql = format("select count(1) from %s.%s %s", tableMeta.getDatabase(),
                 tableMeta.getName(), condition);
-        log.info("countSql:{}", count);
+        log.info("countSql:{}", countSql);
         return count == jdbcTemplate.count(countSql);
     }
 }

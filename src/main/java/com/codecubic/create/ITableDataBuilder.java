@@ -9,5 +9,7 @@ import java.util.Map;
 public interface ITableDataBuilder extends Cloneable {
     void setJdbcTemplate(JdbcTemplate jdbcTemplate);
 
-    void dataCreate(TableMeta tableMeta, Map<String,Object> partitionColValMap, int num, int batch) throws SQLException;
+    boolean dataCreate(TableMeta tableMeta, Map<String,Object> partitionColValMap, int num, int batch) throws SQLException;
+
+    void close();
 }

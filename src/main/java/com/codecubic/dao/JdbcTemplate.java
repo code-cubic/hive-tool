@@ -1,7 +1,7 @@
 package com.codecubic.dao;
 
 import com.codecubic.model.ColumnMeta;
-import com.codecubic.model.JdbcConfig;
+import com.codecubic.model.JdbcConf;
 import com.codecubic.model.TableMeta;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.dbutils.BasicRowProcessor;
@@ -10,10 +10,12 @@ import org.apache.commons.dbutils.QueryRunner;
 import org.apache.commons.dbutils.handlers.BeanHandler;
 import org.apache.commons.dbutils.handlers.BeanListHandler;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
+import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.RetryingMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.thrift.TException;
 
 import java.sql.*;
@@ -25,19 +27,22 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class JdbcTemplate {
-    private JdbcConfig jdbcConfig;
+    private JdbcConf jdbcConf;
     private Connection conn;
-    private HiveMetaStoreClient hiveMetaClient;
+    private IMetaStoreClient hiveMetaClient;
     private HiveConf hiveConf;
 
 
-    public JdbcTemplate(JdbcConfig jdbcConfig) {
-        this.jdbcConfig = jdbcConfig;
+    public JdbcTemplate(JdbcConf jdbcConf) {
+        this.jdbcConf = jdbcConf;
         try {
-            Class.forName(this.jdbcConfig.getDriver());
+            Class.forName(this.jdbcConf.getDriver());
             hiveConf = new HiveConf();
-            hiveConf.addResource("hive-site.xml");
-            hiveMetaClient = new HiveMetaStoreClient(hiveConf);
+
+            hiveConf.set("hive.metastore.uris", "thrift://bxzj-test-swift0.bxzj.baixinlocal.com:9083");
+            //只需要设置一个metastore就可以了，如果设置hive-site.xml务必保证其他参数也对
+//            hiveConf.addResource("hive-site.xml");
+            hiveMetaClient = RetryingMetaStoreClient.getProxy(hiveConf);
         } catch (Exception e) {
             log.error("", e);
         }
@@ -47,7 +52,7 @@ public class JdbcTemplate {
     private synchronized Connection getConn() throws SQLException {
         if (this.conn == null) {
             try {
-                this.conn = DriverManager.getConnection(this.jdbcConfig.getUrl(), this.jdbcConfig.getUser(), this.jdbcConfig.getPasswd());
+                this.conn = DriverManager.getConnection(this.jdbcConf.getUrl(), this.jdbcConf.getUser(), this.jdbcConf.getPasswd());
             } catch (SQLException e) {
                 throw new SQLException("Connect to MySql Server Error : " + e.getMessage());
             }
@@ -58,7 +63,8 @@ public class JdbcTemplate {
     /**
      * 获取数据库
      */
-    public List<String> getAllDatabases() {
+    public List<String> getAllDatabases() throws SQLException {
+        getConn();
         List<String> allDatabases = new ArrayList<>(0);
         try {
             allDatabases = this.hiveMetaClient.getAllDatabases();
@@ -80,6 +86,10 @@ public class JdbcTemplate {
             tables = this.hiveMetaClient.getAllTables(dbName);
         } catch (MetaException e) {
             e.printStackTrace();
+        } catch (UnknownDBException e) {
+            e.printStackTrace();
+        } catch (TException e) {
+            e.printStackTrace();
         }
         return tables;
     }
@@ -96,7 +106,7 @@ public class JdbcTemplate {
     }
 
 
-    public List<ColumnMeta> getColMetas(String database, String tabName) throws SQLException, TException {
+    public List<ColumnMeta> getColMetas(String database, String tabName) throws TException {
         Table table = hiveMetaClient.getTable(database, tabName);
         List<FieldSchema> cols = table.getSd().getCols();
         List<ColumnMeta> columnMetas = cols.stream().map(e -> {
@@ -119,22 +129,22 @@ public class JdbcTemplate {
         return columnMetas;
     }
 
-    public TableMeta getTabMeta(String schema, String tabName) throws SQLException {
+    public TableMeta getTabMeta(String database, String tabName) throws SQLException {
         Connection conn = getConn();
         //获取数据库的元数据
         DatabaseMetaData dbMetaData = conn.getMetaData();
         //从元数据中获取到所有的表名
-        ResultSet rs = dbMetaData.getTables(null, schema, tabName, new String[]{"TABLE"});
+        ResultSet rs = dbMetaData.getTables(null, database, tabName, new String[]{"TABLE"});
         while (rs.next()) {
             TableMeta meta = new TableMeta();
+            meta.setDatabase(database);
             meta.setName(rs.getString("TABLE_NAME"));
             meta.setType(rs.getString("TABLE_TYPE"));
-            meta.setDatabase(rs.getString("TABLE_CAT"));
             meta.setUserName(rs.getString("TABLE_SCHEM"));
             meta.setRemark(rs.getString("REMARKS"));
             List<ColumnMeta> allCols = null;
             try {
-                allCols = getColMetas(schema, tabName);
+                allCols = getColMetas(database, tabName);
             } catch (TException e) {
                 log.error("", e);
             }
