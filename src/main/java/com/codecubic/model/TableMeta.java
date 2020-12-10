@@ -11,12 +11,18 @@ import java.util.List;
 @Setter
 @ToString
 public class TableMeta {
-    private String name;
-    private String type;
     /**
-     * 表所属数据库
+     * 归属数据库
      */
-    private String cat;
+    private String database;
+    /**
+     * 表名
+     */
+    private String name;
+    /**
+     *
+     */
+    private String type;
     /**
      * 表所属用户名
      */
@@ -26,13 +32,10 @@ public class TableMeta {
      */
     private String remark;
 
-    private ColumnMeta pkCol;
-    private ColumnMeta partitionCol;
-
-    private List<ColumnMeta> columnMetaList = new ArrayList<>();
+    private List<ColumnMeta> colMetas = new ArrayList<>();
 
     public void addColMeta(ColumnMeta cm) {
-        this.columnMetaList.add(cm);
+        this.colMetas.add(cm);
     }
 
 }

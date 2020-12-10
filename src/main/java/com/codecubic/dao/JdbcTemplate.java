@@ -15,21 +15,17 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Slf4j
 public class JdbcTemplate {
-    private static String SQL_LIMIT = "select * from ( %s ) GTAB limit %d";
-    private static String SELECT_TEMPLAT = "SELECT * FROM %s limit 1";
-    private JdbcConfig jdbcConfig;
-    private Connection conn;
+    private static String SELECT_TEMPLAT = "select * from %s limit 1";
+    private JdbcConfig _jdbcConfig;
+    private Connection _conn;
 
     public JdbcTemplate(JdbcConfig jdbcConfig) {
-        this.jdbcConfig = jdbcConfig;
+        this._jdbcConfig = jdbcConfig;
         try {
-            Class.forName(jdbcConfig.getDriver());
-            conn = getConn();
+            Class.forName(_jdbcConfig.getDriver());
         } catch (Exception e) {
             log.error("", e);
             e.printStackTrace();
@@ -39,14 +35,14 @@ public class JdbcTemplate {
 
 
     private synchronized Connection getConn() throws SQLException {
-        if (conn == null) {
+        if (_conn == null) {
             try {
-                conn = DriverManager.getConnection(this.jdbcConfig.getUrl(), this.jdbcConfig.getUser(), this.jdbcConfig.getPasswd());
+                _conn = DriverManager.getConnection(this._jdbcConfig.getUrl(), this._jdbcConfig.getUser(), this._jdbcConfig.getPasswd());
             } catch (SQLException e) {
                 throw new SQLException("Connect to MySql Server Error : " + e.getMessage());
             }
         }
-        return conn;
+        return _conn;
     }
 
 
@@ -61,59 +57,6 @@ public class JdbcTemplate {
         stat.execute(sql);
     }
 
-
-    /**
-     * wh: 查询类sql执行
-     *
-     * @param sql
-     * @throws SQLException
-     */
-    public void query4print(String sql) throws SQLException {
-        sql = String.format(SQL_LIMIT, sql, this.jdbcConfig.getShowCount());
-        System.out.println(sql);
-        Connection conn = getConn();
-        Statement stat = conn.createStatement();
-        stat.setFetchSize(200);
-        ResultSet rs = stat.executeQuery(sql);
-        ResultSetMetaData metaData = rs.getMetaData();
-        for (int i = 1; i <= metaData.getColumnCount(); i++) {
-            System.out.print(metaData.getColumnName(i) + "\t|");
-        }
-        while (rs.next()) {
-            System.out.println();
-            for (int i = 1; i <= metaData.getColumnCount(); i++) {
-                System.out.print(rs.getObject(i) + "\t|");
-            }
-        }
-        System.out.println();
-
-    }
-
-    public void printTableList() throws SQLException {
-        for (TableMeta meta : getAllTab()) {
-            System.out.println(meta);
-        }
-    }
-
-
-    public List<TableMeta> getAllTab() throws SQLException {
-        //获取数据库的元数据
-        DatabaseMetaData dbMetaData = conn.getMetaData();
-        //从元数据中获取到所有的表名
-        ResultSet rs = dbMetaData.getTables(null, null, null, new String[]{"TABLE"});
-        List<TableMeta> tableMetas = new ArrayList<TableMeta>();
-        while (rs.next()) {
-            TableMeta meta = new TableMeta();
-            meta.setName(rs.getString("TABLE_NAME"));
-            meta.setType(rs.getString("TABLE_TYPE"));
-            meta.setCat(rs.getString("TABLE_CAT"));
-            meta.setUserName(rs.getString("TABLE_SCHEM"));
-            meta.setRemark(rs.getString("REMARKS"));
-            tableMetas.add(meta);
-        }
-        return tableMetas;
-    }
-
     /**
      * 获取表中所有字段名称
      *
@@ -122,7 +65,7 @@ public class JdbcTemplate {
      */
     private List<String> getAllColNames(String tableName) {
         List<String> columnNames = new ArrayList<>();
-        try (PreparedStatement pStemt = conn.prepareStatement(String.format(SELECT_TEMPLAT, tableName))) {
+        try (PreparedStatement pStemt = _conn.prepareStatement(String.format(SELECT_TEMPLAT, tableName))) {
             // 结果集元数据
             ResultSetMetaData rsmd = pStemt.getMetaData();
             // 表列数
@@ -140,7 +83,7 @@ public class JdbcTemplate {
         List<ColumnMeta> columnMetas = new ArrayList<>();
         try {
             //获取数据库的元数据
-            DatabaseMetaData dbMetaData = conn.getMetaData();
+            DatabaseMetaData dbMetaData = _conn.getMetaData();
             //从元数据中获取到所有的表名
             ResultSet colRet = dbMetaData.getColumns(null, schema, tabName, "%");
             while (colRet.next()) {
@@ -161,7 +104,7 @@ public class JdbcTemplate {
 
     public TableMeta getTabMeta(String schema, String tabName) throws SQLException {
         //获取数据库的元数据
-        DatabaseMetaData dbMetaData = conn.getMetaData();
+        DatabaseMetaData dbMetaData = _conn.getMetaData();
         //从元数据中获取到所有的表名
         ResultSet rs = dbMetaData.getTables(null, schema, tabName, new String[]{"TABLE"});
         while (rs.next()) {
@@ -176,41 +119,14 @@ public class JdbcTemplate {
         return new TableMeta();
     }
 
-    /**
-     * <p>
-     * 生成建表语句
-     * </p>
-     *
-     * @param tableName
-     * @return
-     */
-    public String getCreateTabSql(String tableName) {
-        try (PreparedStatement pstmt = conn.prepareStatement(String.format("SHOW CREATE TABLE %s", tableName))) {
-            ResultSet rs = pstmt.executeQuery();
-            while (rs.next()) {
-                String ddl = rs.getString(2);
-                Pattern compile = Pattern.compile("AUTO_INCREMENT=\\d+\\s");
-                Matcher matcher = compile.matcher(ddl);
-                String sql = matcher.replaceFirst(" AUTO_INCREMENT=1 ") + ";\n";
-                sql = sql.replaceAll("timestamp NOT NULL DEFAULT '0000-00-00 00:00:00'", "timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
-                sql = sql.replaceAll("timestamp NOT NULL COMMENT", "timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT");
-                sql = sql.replaceAll("DEFAULT '0000-00-00 00:00:00.000'", "DEFAULT '1980-01-01 00:00:00'");
-                sql = sql.replaceAll("DEFAULT '1980-01-01 00:00:00.000'", "DEFAULT '1980-01-01 00:00:00'");
-                return sql;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return "";
-    }
 
     public synchronized void close() {
-        if (conn != null) {
+        if (_conn != null) {
             try {
-                conn.close();
+                _conn.close();
             } catch (SQLException e) {
             } finally {
-                conn = null;
+                _conn = null;
             }
         }
     }
@@ -242,7 +158,7 @@ public class JdbcTemplate {
         try {
             QueryRunner qRunner = new QueryRunner();
             List<T> query = (List<T>) qRunner.query(
-                    conn,
+                    _conn,
                     sql,
                     new BeanListHandler(
                             clazz, new BasicRowProcessor(new BeanProcessor(map))));
@@ -261,7 +177,7 @@ public class JdbcTemplate {
 
             QueryRunner qRunner = new QueryRunner();
             T query = (T) qRunner.query(
-                    this.conn,
+                    this._conn,
                     sql,
                     new BeanHandler(
                             clazz, new BasicRowProcessor(new BeanProcessor(map))));
